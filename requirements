@@ -1,0 +1,7 @@
+streamlit
+pandas
+plotly
+statsmodels
+scipy
+python-dotenv
+openai          # or whatever free LLM client you pick (groq, google-generativeai, etc.)
