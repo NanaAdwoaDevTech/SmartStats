@@ -12,7 +12,7 @@ import plotly.express as px
 # ============================================================
 # 2. load_dotenv() + config
 # ============================================================
-load_dotenv()
+load_dotenv()  # Loads secrets from .env (never hard-code keys)
 
 st.set_page_config(page_title="SmartStats", layout="wide")
 st.title("SmartStats – AI Statistical Coach")
@@ -26,7 +26,7 @@ def load_data():
 
 df = load_data()
 
-# Load the system prompt
+# Load the system prompt (keeps the main file clean)
 with open("prompts/statistical_coach.txt", "r") as f:
     SYSTEM_PROMPT = f.read()
 
@@ -34,13 +34,16 @@ with open("prompts/statistical_coach.txt", "r") as f:
 # 4. Helper functions
 # ============================================================
 def run_analysis(df, question: str):
-    """Run a suitable analysis based on keywords in the question"""
-    df = df.copy()
+    """
+    Run a suitable analysis based on keywords in the question.
+    Returns a dictionary with results + charts, or None if unsupported.
+    """
+    df = df.copy()  # Never modify the original dataframe
     df["smoker_bin"] = (df["smoker"] == "yes").astype(int)
     
     q = question.lower()
     
-    # 1. Smoking + controls (age/BMI)
+    # ----- Case 1: Smoking + controls -----
     if "smok" in q and ("age" in q or "bmi" in q):
         model = smf.ols("charges ~ smoker_bin + age + bmi", data=df).fit()
         effect = model.params["smoker_bin"]
@@ -48,16 +51,16 @@ def run_analysis(df, question: str):
         fig1 = px.box(df, x="smoker", y="charges", title="Charges by Smoking Status")
         fig2 = px.scatter(df, x="age", y="charges", color="smoker",
                           title="Charges vs Age by Smoking Status", opacity=0.6)
-    
-    # 2. Simple smoking difference
+
+    # ----- Case 2: Simple smoking difference -----
     elif "smok" in q:
         model = smf.ols("charges ~ smoker_bin", data=df).fit()
         effect = model.params["smoker_bin"]
         title = "Average extra charge for smokers"
         fig1 = px.box(df, x="smoker", y="charges", title="Charges by Smoking Status")
         fig2 = None
-    
-    # 3. BMI effect
+
+    # ----- Case 3: BMI effect -----
     elif "bmi" in q:
         model = smf.ols("charges ~ bmi + age + smoker_bin", data=df).fit()
         effect = model.params["bmi"]
@@ -65,8 +68,8 @@ def run_analysis(df, question: str):
         fig1 = px.scatter(df, x="bmi", y="charges", color="smoker",
                           title="Charges vs BMI", opacity=0.6, trendline="ols")
         fig2 = None
-    
-        # 4. Region effect – show actual averages
+
+    # ----- Case 4: Region (real averages) -----
     elif "region" in q:
         region_means = df.groupby("region")["charges"].mean().sort_values(ascending=False)
         highest = region_means.index[0]
@@ -79,11 +82,9 @@ def run_analysis(df, question: str):
                       title="Medical Charges by Region",
                       category_orders={"region": region_means.index.tolist()})
         fig2 = None
-        
-        # We still fit a model for p-value / r-squared
         model = smf.ols("charges ~ C(region)", data=df).fit()
 
-    # 5. Children – show actual averages by number of children
+    # ----- Case 5: Children (real averages) -----
     elif "child" in q or "children" in q or "family" in q:
         child_means = df.groupby("children")["charges"].mean()
         effect = child_means.max() - child_means.min()
@@ -95,15 +96,23 @@ def run_analysis(df, question: str):
         fig2 = px.bar(x=child_means.index, y=child_means.values,
                       labels={"x": "Number of Children", "y": "Average Charges ($)"},
                       title="Average Charges by Number of Children")
-        
         model = smf.ols("charges ~ children + age + smoker_bin", data=df).fit()
+
     else:
-        return None
-    
+        return None  # Unsupported question
+
+    # ----- Safer p-value extraction (Bug fix) -----
+    # Why? model.params.index[1] can crash if the model structure changes.
+    try:
+        main_var = model.params.index[1]
+        p_value = model.pvalues[main_var]
+    except (IndexError, KeyError):
+        p_value = model.pvalues.iloc[0]
+
     return {
         "title": title,
         "effect": effect,
-        "p_value": model.pvalues[model.params.index[1]] if len(model.params) > 1 else model.pvalues.iloc[0],
+        "p_value": p_value,
         "r_squared": model.rsquared,
         "summary": model.summary().as_text(),
         "fig1": fig1,
@@ -119,23 +128,29 @@ user_question = st.sidebar.text_area(
     placeholder="e.g. How does smoking affect medical charges after controlling for age and BMI?"
 )
 
-# Button 1 – AI Coach
+# Button 1 – AI Coach (with error handling – Security + Reliability)
 if st.sidebar.button("Propose Analysis Approach"):
-    if user_question.strip():
-        st.subheader("AI Statistical Coach")
-        client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-        with st.spinner("Thinking..."):
-            response = client.chat.completions.create(
-                model="qwen/qwen3.8-27b",
-                messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": user_question}
-                ],
-                temperature=0.3,
-            )
-            st.markdown(response.choices[0].message.content)
-    else:
+    if not user_question.strip():
         st.warning("Please type a question first.")
+    else:
+        st.subheader("AI Statistical Coach")
+        try:
+            client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+            with st.spinner("Thinking..."):
+                response = client.chat.completions.create(
+                    model="qwen/qwen3.8-27b",
+                    messages=[
+                        {"role": "system", "content": SYSTEM_PROMPT},
+                        {"role": "user", "content": user_question}
+                    ],
+                    temperature=0.3,
+                )
+                st.markdown(response.choices[0].message.content)
+        except Exception as e:
+            # Why try/except?  
+            # If the API key is missing, rate-limited, or Groq is down,
+            # the app should fail gracefully instead of crashing.
+            st.error(f"Sorry, the AI coach is temporarily unavailable.\n\nError: {e}")
 
 # Button 2 – Run Analysis
 if st.sidebar.button("Run Analysis & Show Charts"):
@@ -145,7 +160,7 @@ if st.sidebar.button("Run Analysis & Show Charts"):
         results = run_analysis(df, user_question)
         
         if results is None:
-            st.info("I don't have a ready-made analysis for this question yet. Try asking about smoking or BMI.")
+            st.info("I don't have a ready-made analysis for this question yet. Try asking about smoking, BMI, region, or children.")
         else:
             st.subheader("Analysis Results")
             st.metric(results["title"], f"${results['effect']:,.0f}")
