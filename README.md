@@ -33,16 +33,6 @@ It is designed with an actuarial mindset: careful about uncertainty, model risk,
 - **LLM**: Groq (Qwen 3.8 27B)
 - **Language**: Python
 
----
-
-## How to Run Locally
-
-1. Clone the repository
-```bash
-git clone https://github.com/NanaAdwoaDevTech/SmartStats.git
-cd SmartStats
-
-
 
 
 ---
@@ -63,3 +53,15 @@ You can now create the file:
 # In your project root
 touch README.md
 # Then paste the content above into it
+
+---
+
+## How to Run Locally
+
+1. Clone the repository
+```bash
+git clone https://github.com/NanaAdwoaDevTech/SmartStats.git
+cd SmartStats
+
+
+
