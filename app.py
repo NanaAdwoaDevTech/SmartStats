@@ -40,39 +40,70 @@ def run_analysis(df, question: str):
     
     q = question.lower()
     
+    # 1. Smoking + controls (age/BMI)
     if "smok" in q and ("age" in q or "bmi" in q):
         model = smf.ols("charges ~ smoker_bin + age + bmi", data=df).fit()
         effect = model.params["smoker_bin"]
         title = "Estimated extra charge for smokers (controlling for age & BMI)"
-        
         fig1 = px.box(df, x="smoker", y="charges", title="Charges by Smoking Status")
         fig2 = px.scatter(df, x="age", y="charges", color="smoker",
                           title="Charges vs Age by Smoking Status", opacity=0.6)
     
+    # 2. Simple smoking difference
     elif "smok" in q:
         model = smf.ols("charges ~ smoker_bin", data=df).fit()
         effect = model.params["smoker_bin"]
         title = "Average extra charge for smokers"
-        
         fig1 = px.box(df, x="smoker", y="charges", title="Charges by Smoking Status")
         fig2 = None
     
+    # 3. BMI effect
     elif "bmi" in q:
         model = smf.ols("charges ~ bmi + age + smoker_bin", data=df).fit()
         effect = model.params["bmi"]
         title = "Estimated change in charges per 1 unit of BMI"
-        
         fig1 = px.scatter(df, x="bmi", y="charges", color="smoker",
                           title="Charges vs BMI", opacity=0.6, trendline="ols")
         fig2 = None
     
+        # 4. Region effect – show actual averages
+    elif "region" in q:
+        region_means = df.groupby("region")["charges"].mean().sort_values(ascending=False)
+        highest = region_means.index[0]
+        lowest = region_means.index[-1]
+        effect = region_means.iloc[0] - region_means.iloc[-1]
+        
+        title = f"Highest region ({highest}): ${region_means.iloc[0]:,.0f}  |  Lowest ({lowest}): ${region_means.iloc[-1]:,.0f}"
+        
+        fig1 = px.box(df, x="region", y="charges", 
+                      title="Medical Charges by Region",
+                      category_orders={"region": region_means.index.tolist()})
+        fig2 = None
+        
+        # We still fit a model for p-value / r-squared
+        model = smf.ols("charges ~ C(region)", data=df).fit()
+
+    # 5. Children – show actual averages by number of children
+    elif "child" in q or "children" in q or "family" in q:
+        child_means = df.groupby("children")["charges"].mean()
+        effect = child_means.max() - child_means.min()
+        
+        title = f"Average charges range from ${child_means.min():,.0f} (0 children) to ${child_means.max():,.0f}"
+        
+        fig1 = px.box(df, x="children", y="charges", 
+                      title="Medical Charges by Number of Children")
+        fig2 = px.bar(x=child_means.index, y=child_means.values,
+                      labels={"x": "Number of Children", "y": "Average Charges ($)"},
+                      title="Average Charges by Number of Children")
+        
+        model = smf.ols("charges ~ children + age + smoker_bin", data=df).fit()
     else:
         return None
     
     return {
         "title": title,
         "effect": effect,
-        "p_value": model.pvalues[model.params.index[1]],
+        "p_value": model.pvalues[model.params.index[1]] if len(model.params) > 1 else model.pvalues.iloc[0],
         "r_squared": model.rsquared,
         "summary": model.summary().as_text(),
         "fig1": fig1,
