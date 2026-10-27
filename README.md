@@ -47,12 +47,6 @@ It is designed with an actuarial mindset: careful about uncertainty, model risk,
 - Always include a “How to Run” section for any public project.
 - End with license (MIT is the simplest and most common for student projects).
 
-You can now create the file:
-
-```bash
-# In your project root
-touch README.md
-# Then paste the content above into it
 
 ---
 
