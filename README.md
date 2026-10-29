@@ -2,6 +2,10 @@
 
 SmartStats is an AI-powered statistical coaching tool that helps users think clearly about data analysis.
 
+## Live Demo
+
+[https://smartstats-8qgvhfmw9czhpuexvk3brs.streamlit.app/](https://smartstats-8qgvhfmw9czhpuexvk3brs.streamlit.app/)
+
 Instead of just running numbers, it first explains the right statistical approach, lists key assumptions, highlights risks and limitations, and only then performs the analysis and shows charts.
 
 It is designed with an actuarial mindset: careful about uncertainty, model risk, and over-claiming results.
