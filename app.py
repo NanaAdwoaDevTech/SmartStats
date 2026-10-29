@@ -144,12 +144,10 @@ if st.sidebar.button("Propose Analysis Approach"):
                         {"role": "user", "content": user_question}
                     ],
                     temperature=0.3,
+                    max_tokens=800,          # ← This is the new line
                 )
                 st.markdown(response.choices[0].message.content)
         except Exception as e:
-            # Why try/except?  
-            # If the API key is missing, rate-limited, or Groq is down,
-            # the app should fail gracefully instead of crashing.
             st.error(f"Sorry, the AI coach is temporarily unavailable.\n\nError: {e}")
 
 # Button 2 – Run Analysis
